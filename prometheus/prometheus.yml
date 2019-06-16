@@ -1,0 +1,22 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'MitM Defense'
+
+scrape_configs:
+  - job_name: 'Master with no checking'
+    static_configs:
+      - targets: ['docker.for.win.localhost:9330']
+
+  - job_name: 'Master with lesser checking'
+    static_configs:
+      - targets: ['docker.for.win.localhost:9336']
+
+  - job_name: 'Master with less checking'
+    static_configs:
+      - targets: ['docker.for.win.localhost:9337']
+
+  - job_name: 'Master with more checking'
+    static_configs:
+      - targets: ['docker.for.win.localhost:9338']

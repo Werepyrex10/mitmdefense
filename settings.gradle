@@ -1,0 +1,5 @@
+rootProject.name = 'MitM Defense'
+
+include("CoreUtils")
+include("Slave")
+include("Master")
