@@ -2,7 +2,9 @@ package http
 
 import com.beust.klaxon.Klaxon
 import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
+import io.ktor.client.request.host
 import io.ktor.client.request.post
 import kotlinx.coroutines.*
 import metrics.Metrics
@@ -11,14 +13,10 @@ import model.ResponseModel
 import model.SSLModel
 import resolver.DNSResolver
 import resolver.SSLResolver
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.CoroutineContext
 import kotlin.system.measureNanoTime
 import kotlin.system.measureTimeMillis
 
-class Client (private val port: Int) {
+class Client(private val port: Int) {
     private val klaxon = Klaxon()
     private val client = HttpClient()
     private val dnsResolver = DNSResolver()
@@ -44,22 +42,30 @@ class Client (private val port: Int) {
     private suspend fun checkDNS(host: String, ipv4: List<String>, ipv6: List<String>): Boolean {
         val model = DNSModel(host, ipv4, ipv6)
         val body = klaxon.toJsonString(model)
-        val response = klaxon.parse<ResponseModel>(client.post<String>(
-            port = port,
-            path = "/checkDNS",
-            body = body
-        ))
+        try {
+            val response = klaxon.parse<ResponseModel>(
+                client.post<String>(
+                    port = port,
+                    path = "/checkDNS",
+                    body = body
+                )
 
-        if (response!!.response == "success") {
-            println("DNS SUCCESS!")
-            return true
-        } else {
+            )
+
+            if (response!!.response == "success") {
+                println("DNS SUCCESS!")
+                return true
+            } else {
+                return false
+                println("DNS HACKED!")
+            }
+        } catch (e: Exception) {
+            println("DNS ${e.localizedMessage}")
             return false
-            println("DNS HACKED!")
         }
     }
 
-    private suspend fun checkSSL(host: String, certificate: String) {
+    private suspend fun checkSSL(host: String, certificate: String): Boolean {
         val model = SSLModel(host, certificate)
         val body = klaxon.toJsonString(model)
 
@@ -74,48 +80,51 @@ class Client (private val port: Int) {
 
             if (response!!.response == "success") {
                 println("SSL SUCCESS!")
+                return true
             } else {
                 println("SSL HACKED!")
+                return false
             }
         } catch (e: Exception) {
-            println(e.localizedMessage)
+            println("SSL ${e.localizedMessage}")
+            return false
         }
     }
 
     private suspend fun doWork(host: String, times: Int) {
-        for(i in 1..times) {
+        val request = HttpRequestBuilder()
+        request.host = host
+        for (i in 1..times) {
             try {
-                val result = client.get<String>(
-                    host = host
-                )
+                client.get<String>(host = host)
             } catch (e: Exception) {
-
+                println("Work ${e.localizedMessage}")
             }
         }
     }
 
     fun start(endpoints: List<String>, check: Boolean, work: Int) {
 
-           while(true) {
-               runBlocking {
-                endpoints.forEach {
-                    val dnsHost = it
-                    val sslHost = "https://$dnsHost"
+        while (true) {
+            endpoints.forEach {
+                val dnsHost = it
+                val sslHost = "https://$dnsHost"
 
-                    println("Start $sslHost")
+                println("Start $sslHost")
 
+                runBlocking {
                     val duration = measureNanoTime {
                         if (check) {
                             dnsFlow(dnsHost)
                             sslFlow(sslHost)
                         }
-                        doWork(sslHost, work)
+                        doWork(dnsHost, work)
                     }
 
                     Metrics.timerOverall.set(duration)
-
-                    println("End $sslHost")
                 }
+
+                println("End $sslHost")
             }
         }
     }
